@@ -299,23 +299,29 @@
     if (status === 400 && /api key|API_KEY/i.test(m)) return "La clave de API no es válida. Revísala en ⚙.";
     if (status === 401 || status === 403) return "El servicio ha rechazado la clave (" + status + "). Comprueba que está bien copiada y que tiene permiso: " + m.slice(0, 120);
     if (status === 404) return "No encuentro el modelo «" + model() + "». Cámbialo en ⚙ (por ejemplo gemini-flash-latest).";
-    if (status === 402 || status === 502 || status === 503) return "La IA gratuita está saturada ahora mismo. Inténtalo en un minuto o conecta tu propia clave en ⚙.";
-    if (status === 429) return "Se ha alcanzado el límite de peticiones de la IA gratuita. Espera un minuto y vuelve a intentarlo.";
+    var who = ({ free: "La IA gratuita integrada", gemini: "Gemini", claude: "Claude" })[prov()];
+    if (status === 402 || status === 500 || status === 502 || status === 503 || status === 504) return who + " está saturado ahora mismo (error " + status + "). Inténtalo en un minuto" + (prov() === "free" ? " o conecta tu propia clave en ⚙." : ".");
+    if (status === 429) return "Se ha alcanzado el límite de peticiones de " + who + ". Espera un minuto y vuelve a intentarlo.";
     return "Error " + status + ": " + m.slice(0, 220);
   }
   async function streamChat(hist, onText, signal) {
     var sys = SYSTEM + "\n\nContexto de la interfaz: tema elegido por el alumno: " + (state.topic ? TOPICS[state.topic] : "ninguno (libre)") + "; nivel: " + G.niveles[state.level] + ".";
-    var msgs = norm(hist), resp, P = prov();
+    var msgs = norm(hist), resp, P = prov(); state.used = null;
     if (P === "free") {
       resp = await fetch("https://text.pollinations.ai/openai", {
         method: "POST", signal: signal, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: model(), stream: true, temperature: 0.6, messages: [{ role: "system", content: sys }].concat(msgs.map(function (m) { return { role: m.role === "user" ? "user" : "assistant", content: m.text }; })) })
       });
     } else if (P === "gemini") {
-      resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model()) + ":streamGenerateContent?alt=sse", {
-        method: "POST", signal: signal, headers: { "Content-Type": "application/json", "x-goog-api-key": cfg.key },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: msgs.map(function (m) { return { role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }; }), generationConfig: { temperature: 0.7 } })
-      });
+      var tryModels = [model(), "gemini-2.5-flash", "gemini-2.5-flash-lite"].filter(function (m, i, arr) { return arr.indexOf(m) === i; });
+      for (var mi = 0; mi < tryModels.length; mi++) {
+        resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(tryModels[mi]) + ":streamGenerateContent?alt=sse", {
+          method: "POST", signal: signal, headers: { "Content-Type": "application/json", "x-goog-api-key": cfg.key },
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: msgs.map(function (m) { return { role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }; }), generationConfig: { temperature: 0.7 } })
+        });
+        state.used = tryModels[mi];
+        if (resp.ok || [429, 500, 502, 503, 504].indexOf(resp.status) < 0 || mi === tryModels.length - 1) break;
+      }
     } else {
       resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", signal: signal, headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
@@ -367,7 +373,7 @@
     });
     function finish(d2, txt) {
       busy(false);
-      d2.querySelector(".tt-b").insertAdjacentHTML("beforeend", '<div class="tt-via">Respondido con ' + ({ free: "la IA gratuita integrada", gemini: "Gemini", claude: "Claude" })[prov()] + " · " + esc(model()) + "</div>");
+      d2.querySelector(".tt-b").insertAdjacentHTML("beforeend", '<div class="tt-via">Respondido con ' + ({ free: "la IA gratuita integrada", gemini: "Gemini", claude: "Claude" })[prov()] + " · " + esc(state.used || model()) + "</div>");
       if (/```figura|:::pista|:::solucion/.test(txt)) {
         d2.querySelector(".tt-b").insertAdjacentHTML("beforeend", '<div class="tt-sug"><button type="button" class="chip" data-c="llm-more">Otro parecido</button><button type="button" class="chip" data-c="llm-hard">Más difícil</button><button type="button" class="chip" data-c="llm-solve">Resuélvelo paso a paso</button></div>');
       }
@@ -463,7 +469,7 @@
     if (prov() === "free") { say("Listo: uso **la IA gratuita integrada**."); return; }
     var nm = ({ gemini: "Gemini", claude: "Claude" })[prov()], d = say("Probando tu clave de " + nm + "…"), got = "";
     streamChat([{ role: "user", text: "Responde solo con la palabra: OK" }], function (t) { got += t; }, null).then(function () {
-      d.querySelector(".tt-b").innerHTML = md("✓ **" + nm + " funciona** con tu clave (modelo `" + model() + "`). A partir de ahora contesto con " + nm + "."); typeset(d);
+      d.querySelector(".tt-b").innerHTML = md("✓ **" + nm + " funciona** con tu clave (modelo `" + (state.used || model()) + "`). A partir de ahora contesto con " + nm + "."); typeset(d);
     }).catch(function (e) {
       d.querySelector(".tt-b").innerHTML = '<p class="tt-err">' + esc("No he podido usar " + nm + ": " + e.message) + "</p><p>Mientras no se arregle, las preguntas fallarán: puedes volver a <b>IA gratuita integrada</b> en ⚙.</p>";
     });
