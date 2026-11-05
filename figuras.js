@@ -173,8 +173,19 @@
     return { a: S[0], b: S[1], c: S[2], A: A[0], B: A[1], C: A[2] };
   }
 
+  /* si faltan datos numéricos, los saco de las etiquetas («10 m», «45°») */
+  function fromLabels(sp) {
+    var g = {}, k, m;
+    ["a", "b", "c", "A", "B", "C"].forEach(function (x) { if (num(sp[x])) g[x] = sp[x]; });
+    [["lados", ["a", "b", "c"]], ["angulos", ["A", "B", "C"]]].forEach(function (pr) {
+      var lab = sp[pr[0]] || {};
+      pr[1].forEach(function (x) { if (!num(g[x]) && lab[x] != null && (m = /^\s*(?:[A-Za-z]\s*=\s*)?(-?\d+(?:[.,]\d+)?)/.exec(String(lab[x])))) g[x] = parseFloat(m[1].replace(",", ".")); });
+    });
+    return g;
+  }
   function triangulo(sp) {
-    var g = solveTri(sp), un = sp.unidad || "";
+    var g, un = sp.unidad || "";
+    try { g = solveTri(sp); } catch (e) { g = solveTri(fromLabels(sp)); }
     var P = { A: [0, 0], B: [g.c, 0], C: [g.b * Math.cos(g.A * RAD), g.b * Math.sin(g.A * RAD)] };
     var names = sp.vertices || ["A", "B", "C"];
     var xmin = Math.min(0, P.C[0]), xmax = Math.max(g.c, P.C[0]);
@@ -197,7 +208,7 @@
     /* ángulos */
     var order = ["A", "B", "C"];
     order.forEach(function (k, i) {
-      var t = angs[k] != null ? angs[k] : (num(sp[k]) ? Math.round(sp[k] * 10) / 10 + "°" : "");
+      var t = angs[k] != null ? angs[k] : (num(sp[k]) && !sp.angulos ? Math.round(sp[k] * 10) / 10 + "°" : "");
       if (t === "" || t === false) return;
       var p = S[k], n1 = S[order[(i + 1) % 3]], n2 = S[order[(i + 2) % 3]];
       var l1 = Math.hypot(n1[0] - p[0], n1[1] - p[1]), l2 = Math.hypot(n2[0] - p[0], n2[1] - p[1]), m = Math.min(l1, l2);
@@ -206,7 +217,7 @@
     /* lados */
     var sides = { a: ["B", "C"], b: ["C", "A"], c: ["A", "B"] };
     Object.keys(sides).forEach(function (k) {
-      var t = lab[k] != null ? lab[k] : (num(sp[k]) ? fmtNum(sp[k]) + (un ? " " + un : "") : "");
+      var t = lab[k] != null ? lab[k] : (num(sp[k]) && !sp.lados ? fmtNum(sp[k]) + (un ? " " + un : "") : "");
       if (t === "" || t === false) return;
       var p = S[sides[k][0]], q = S[sides[k][1]], mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
       var nrm = unit(-(q[1] - p[1]), q[0] - p[0]);

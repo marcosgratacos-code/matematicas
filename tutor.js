@@ -14,11 +14,14 @@
   function load() { try { return JSON.parse(localStorage.getItem(LS) || "{}") || {}; } catch (e) { return {}; } }
   function save() { try { localStorage.setItem(LS, JSON.stringify({ prov: cfg.prov, key: cfg.key, model: cfg.model, topic: state.topic, level: state.level })); } catch (e) {} }
   var saved = load();
-  var cfg = { prov: saved.prov || "gemini", key: saved.key || "", model: saved.model || "" };
+  var cfg = { prov: saved.prov || "free", key: saved.key || "", model: saved.model || "" };
   var state = { topic: saved.topic || "", level: saved.level || 2, cur: null, hintN: 0, busy: false, hist: [], ctrl: null, last: null };
-  var DEFAULT_MODEL = { gemini: "gemini-flash-latest", claude: "claude-sonnet-5-5" };
-  function model() { return cfg.model || DEFAULT_MODEL[cfg.prov]; }
+  var DEFAULT_MODEL = { free: "openai", gemini: "gemini-flash-latest", claude: "claude-sonnet-5-5" };
   function hasKey() { return cfg.key.length > 10; }
+  /* servicio realmente en uso: sin clave siempre se usa la IA gratuita integrada */
+  function prov() { return cfg.prov !== "free" && hasKey() ? cfg.prov : "free"; }
+  function model() { return (cfg.prov === prov() && cfg.model) || DEFAULT_MODEL[prov()]; }
+  function aiOn() { return true; }
 
   /* ---------- Markdown + LaTeX (sin dependencias) ---------- */
   function figHtml(txt) {
@@ -96,8 +99,8 @@
     '<button type="button" id="tt-cfg" title="Ajustes de la IA" aria-label="Ajustes de la IA"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>' +
     '<button type="button" id="tt-x" class="tt-close" title="Cerrar" aria-label="Cerrar el chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>' +
     '<div class="tt-cfgp" id="tt-cfgp" hidden>' +
-    '<p class="tt-note"><b>Para preguntarme cualquier cosa</b> necesito una IA. Es gratis con Gemini: crea una clave en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> y pégala aquí. La clave se guarda <b>solo en este navegador</b>; nunca se sube a GitHub. Sin clave, el generador de problemas integrado funciona igual.</p>' +
-    '<label>Servicio<select id="tt-prov"><option value="gemini">Gemini (gratis)</option><option value="claude">Claude (Anthropic, de pago)</option></select></label>' +
+    '<p class="tt-note">Por defecto uso una <b>IA gratuita integrada</b> (sin clave; es un servicio de terceros, así que no escribas datos personales). Para respuestas más finas y figuras más fiables, usa tu propia clave: con <b>Gemini es gratis</b> en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. La clave se guarda <b>solo en este navegador</b>.</p>' +
+    '<label>Servicio<select id="tt-prov"><option value="free">IA gratuita integrada (sin clave)</option><option value="gemini">Gemini (con tu clave, gratis)</option><option value="claude">Claude (Anthropic, de pago)</option></select></label>' +
     '<label>Clave de API<input id="tt-key" type="password" autocomplete="off" spellcheck="false" placeholder="Pega tu clave aquí"></label>' +
     '<label>Modelo<input id="tt-model" list="tt-models" spellcheck="false"><datalist id="tt-models"></datalist></label>' +
     '<div class="tt-row"><button type="button" class="btn primary small" id="tt-save">Guardar</button><button type="button" class="btn small" id="tt-rm">Quitar clave</button></div></div>' +
@@ -116,14 +119,14 @@
   document.body.appendChild(fab);
 
   function setStatus() {
-    elSt.textContent = hasKey() ? "IA conectada · " + (cfg.prov === "gemini" ? "Gemini" : "Claude") : "Generador integrado · sin IA";
-    elSt.className = "tt-st " + (hasKey() ? "on" : "off");
-    var ph = hasKey() ? "Pregúntame lo que quieras…" : "Escribe tu duda…";
+    elSt.textContent = "IA conectada · " + ({ free: "gratuita integrada", gemini: "Gemini", claude: "Claude" })[prov()];
+    elSt.className = "tt-st on";
+    var ph = "Pregúntame lo que quieras…";
     elIn.placeholder = ph;
   }
   function chips() {
     var c = [["Inventa un problema", "p"], ["Otro parecido", "same"], ["Dame una pista", "hint"], ["Resumen de teoría", "teoria"]];
-    if (hasKey()) c.push(["Problema a medida (IA)", "ia"]);
+    c.push(["Problema a medida (IA)", "ia"]);
     elChips.innerHTML = c.map(function (x) { return '<button type="button" class="chip" data-c="' + x[1] + '">' + esc(x[0]) + "</button>"; }).join("");
   }
   setStatus(); chips();
@@ -252,7 +255,7 @@
   /* ---------- IA ---------- */
   var SYSTEM = [
     "Eres «Profe Mates», un profesor virtual de matemáticas para alumnos de 1.º de Bachillerato (Catalunya, curso 2026/27). El temario incluye: trigonometría (radianes, teoremas del seno y del coseno, ecuaciones trigonométricas), funciones y límites, derivadas (reglas, recta tangente, extremos, optimización), vectores y producto escalar, números complejos (binómica, polar, Moivre), exponenciales y logaritmos. También puedes contestar preguntas de cualquier otra materia o tema, con claridad y sin enrollarte.",
-    "Responde en el idioma del alumno (castellano o catalán). Sé cercano, preciso y didáctico. No inventes datos: si no estás seguro, dilo.",
+    "IDIOMA: responde SIEMPRE en el idioma del último mensaje del alumno (si escribe en castellano, en castellano; si escribe en catalán, en catalán), aunque el temario esté en catalán. Sé cercano, preciso y didáctico. No inventes datos: si no estás seguro, dilo.",
     "FORMATO: Markdown. Fórmulas siempre en LaTeX: $...$ en línea y $$...$$ destacadas. Sin HTML.",
     "",
     "CUANDO PIDAN UN PROBLEMA (o «inventa un problema»), responde SIEMPRE con esta estructura:",
@@ -277,6 +280,7 @@
     '- {"tipo":"sector","theta":60,"etR":"r = 8 cm","etTheta":"60°","etS":"s = ?"} → sector circular.',
     '- {"tipo":"valla","etX":"x","etY":"y"} → terreno rectangular junto a un río (valla en 3 lados).',
     '- {"tipo":"plano","x":[-5,5],"y":[-4,6],"funciones":[{"f":"x^3-3*x","etiqueta":"f(x)","trazo":"discontinuo"}],"puntos":{"A":[1,2],"B":[4,3]},"segmentos":[{"de":"A","a":"B","flecha":true,"n":"u"}],"poligono":["A","B","C"],"circulos":[{"c":[0,0],"r":1}],"rectas":[{"x":2},{"y":1},{"m":1,"n":2}],"angulos":[{"en":"A","entre":["B","C"],"n":"θ"}],"textos":[{"p":[1,1],"t":"texto"}],"ejes":["x","y"]} → plano cartesiano con coordenadas reales; sirve para gráficas de funciones, vectores, números complejos (ejes ["Re","Im"]), circunferencia goniométrica y cualquier figura geométrica con coordenadas. Todos los campos salvo "x" e "y" son opcionales. Las funciones se escriben en x con ^, sin, cos, tan, ln, log, exp, sqrt, abs, pi (ejemplo: (2*x+1)/(x-3)). "rectas" con "x":c (vertical), "y":c (horizontal) o "m","n" (y=mx+n) dibuja asíntotas o rectas auxiliares discontinuas. Los puntos pueden llevar "pos":"n|s|e|o|ne|no|se|so". Elige "x" e "y" para que se vea toda la figura.',
+    "REGLA CLAVE DE LAS FIGURAS: en las etiquetas («lados», «angulos», «etH», «etD»…) muestra SOLO los datos del enunciado y pon «?» en lo que se pide; la figura nunca debe revelar resultados. Si «lados» o «angulos» están presentes, solo se dibujan las etiquetas que escribas. Para que el triángulo se dibuje necesitas dar 3 datos (como números en A, B, C, a, b, c); los que sean incógnitas del problema ocúltalos con «?» en las etiquetas.",
     "No uses otros tipos. Etiquetas cortas. Si no hace falta figura, no la pongas."
   ].join("\n");
 
@@ -294,13 +298,19 @@
     if (status === 400 && /api key|API_KEY/i.test(m)) return "La clave de API no es válida. Revísala en ⚙.";
     if (status === 401 || status === 403) return "El servicio ha rechazado la clave (" + status + "). Comprueba que está bien copiada y que tiene permiso: " + m.slice(0, 120);
     if (status === 404) return "No encuentro el modelo «" + model() + "». Cámbialo en ⚙ (por ejemplo gemini-flash-latest).";
-    if (status === 429) return "Has llegado al límite de peticiones del plan gratuito. Espera un minuto y vuelve a intentarlo.";
+    if (status === 402 || status === 502 || status === 503) return "La IA gratuita está saturada ahora mismo. Inténtalo en un minuto o conecta tu propia clave en ⚙.";
+    if (status === 429) return "Se ha alcanzado el límite de peticiones de la IA gratuita. Espera un minuto y vuelve a intentarlo.";
     return "Error " + status + ": " + m.slice(0, 220);
   }
   async function streamChat(hist, onText, signal) {
     var sys = SYSTEM + "\n\nContexto de la interfaz: tema elegido por el alumno: " + (state.topic ? TOPICS[state.topic] : "ninguno (libre)") + "; nivel: " + G.niveles[state.level] + ".";
-    var msgs = norm(hist), resp;
-    if (cfg.prov === "gemini") {
+    var msgs = norm(hist), resp, P = prov();
+    if (P === "free") {
+      resp = await fetch("https://text.pollinations.ai/openai", {
+        method: "POST", signal: signal, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: model(), stream: true, temperature: 0.6, messages: [{ role: "system", content: sys }].concat(msgs.map(function (m) { return { role: m.role === "user" ? "user" : "assistant", content: m.text }; })) })
+      });
+    } else if (P === "gemini") {
       resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model()) + ":streamGenerateContent?alt=sse", {
         method: "POST", signal: signal, headers: { "Content-Type": "application/json", "x-goog-api-key": cfg.key },
         body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: msgs.map(function (m) { return { role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }; }), generationConfig: { temperature: 0.7 } })
@@ -323,7 +333,10 @@
         var d = line.slice(5).trim(); if (!d || d === "[DONE]") continue;
         var j; try { j = JSON.parse(d); } catch (e) { continue; }
         if (j.error) throw new Error(apiErr(500, JSON.stringify(j)));
-        if (cfg.prov === "gemini") {
+        if (P === "free") {
+          var dl = j.choices && j.choices[0] && j.choices[0].delta;
+          if (dl && dl.content) { any = true; onText(dl.content); }
+        } else if (P === "gemini") {
           if (j.promptFeedback && j.promptFeedback.blockReason) throw new Error("La IA no ha podido responder a eso (" + j.promptFeedback.blockReason + ").");
           var parts = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts;
           (parts || []).forEach(function (p) { if (p.text && !p.thought) { any = true; onText(p.text); } });
@@ -336,6 +349,7 @@
     state.hist.push({ role: "user", text: text });
     var d = addBot('<span class="tt-dots" aria-label="Pensando"><i></i><i></i><i></i></span>'), b = d.querySelector(".tt-b"), acc = "", raf = 0, ctrl = new AbortController();
     state.ctrl = ctrl; busy(true);
+    setTimeout(function () { if (!acc && state.busy && b.querySelector(".tt-dots")) b.insertAdjacentHTML("beforeend", '<p class="tt-stop">Pensando… la IA gratuita puede tardar hasta un minuto.</p>'); }, 7000);
     function paint(final) {
       raf = 0; var stick = nearBottom();
       b.innerHTML = md(acc); typeset(b);
@@ -392,7 +406,7 @@
     if (/^\s*(dame (una )?|otra )?pista/i.test(text) && state.cur) { revealHint(); return; }
     if (/^\s*(ver |dame |mu[eé]strame |quiero )?(la )?(soluci[oó]n|resoluci[oó]n)( paso a paso)?\s*[.!]?$/i.test(text) && state.cur) { revealSolution(); return; }
     if (/^\s*(resumen de )?(la )?teor[ií]a/i.test(text) && text.length < 40) { theory(); return; }
-    if (hasKey()) { askLLM(text); return; }
+    if (aiOn()) { askLLM(text); return; }
     if (PROB_RE.test(text)) {
       var o = { texto: text };
       if (HARD_RE.test(text)) o.nivel = 3; else if (EASY_RE.test(text)) o.nivel = 1;
@@ -425,7 +439,7 @@
     else if (c === "same") { addUser("Otro parecido"); if (state.cur) newProblem({ plantilla: state.cur.id }); else newProblem({}); }
     else if (c === "hint") { addUser("Dame una pista"); revealHint(); }
     else if (c === "teoria") { addUser("Resumen de teoría"); theory(); }
-    else if (LLM_PROMPTS[c]) { var t = LLM_PROMPTS[c](); addUser(t); if (hasKey()) askLLM(t); else fallback(t); }
+    else if (LLM_PROMPTS[c]) { var t = LLM_PROMPTS[c](); addUser(t); askLLM(t); }
   }
   host.addEventListener("click", function (e) { var b = e.target.closest("[data-c]"); if (b) action(b.getAttribute("data-c"), b); });
   $("#tt-cfg").addEventListener("click", function () { elCfgP.hidden = !elCfgP.hidden; });
@@ -434,23 +448,24 @@
   selT.addEventListener("change", function () { state.topic = selT.value; save(); });
   selL.addEventListener("change", function () { state.level = +selL.value; save(); });
   function fillModels() {
-    var l = cfg.prov === "gemini" ? ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-pro-latest"] : ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"];
+    var l = cfg.prov === "free" ? ["openai"] : cfg.prov === "gemini" ? ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-pro-latest"] : ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"];
     $("#tt-models").innerHTML = l.map(function (m) { return '<option value="' + m + '">'; }).join("");
-    inModel.placeholder = DEFAULT_MODEL[cfg.prov];
+    inModel.placeholder = DEFAULT_MODEL[cfg.prov]; inKey.disabled = cfg.prov === "free"; inKey.placeholder = cfg.prov === "free" ? "No hace falta clave" : "Pega tu clave aquí";
   }
   fillModels();
   selP.addEventListener("change", function () { cfg.prov = selP.value; inModel.value = ""; fillModels(); });
+  fillModels();
   $("#tt-save").addEventListener("click", function () {
     cfg.prov = selP.value; cfg.key = inKey.value.trim(); cfg.model = inModel.value.trim(); save(); setStatus(); chips(); elCfgP.hidden = true;
-    say(hasKey() ? "Listo: **IA conectada**. Ya puedes preguntarme lo que quieras o pedirme un problema a medida (por ejemplo: «inventa un problema de optimización con una caja y dibújala»)." : "He guardado los ajustes, pero falta la clave de API.");
+    say(cfg.prov !== "free" && !hasKey() ? "He guardado los ajustes, pero falta la clave de API: mientras tanto uso la IA gratuita integrada." : "Listo: ahora uso **" + ({ free: "la IA gratuita integrada", gemini: "Gemini con tu clave", claude: "Claude con tu clave" })[prov()] + "**.");
   });
-  $("#tt-rm").addEventListener("click", function () { cfg.key = ""; inKey.value = ""; save(); setStatus(); chips(); say("He borrado la clave de este navegador."); });
+  $("#tt-rm").addEventListener("click", function () { cfg.key = ""; inKey.value = ""; save(); setStatus(); chips(); say("He borrado la clave de este navegador. Vuelvo a usar la IA gratuita integrada."); });
   $("#tt-new").addEventListener("click", function () {
     if (state.ctrl) state.ctrl.abort(); state.hist = []; state.cur = null; elMsgs.innerHTML = ""; busy(false); welcome();
   });
 
   function welcome() {
-    var h = "<p><b>¡Hola!</b> Soy tu profe de mates de 1.º de Bachillerato. Puedo:</p><ul><li>inventarte <b>problemas con dibujo, datos y solución paso a paso</b> (nuevos cada vez);</li><li>darte <b>pistas</b> y <b>comprobar tus respuestas</b>;</li><li>" + (hasKey() ? "responder <b>cualquier duda</b> y crear problemas a medida." : "responder <b>cualquier duda</b> si conectas la IA en ⚙ (gratis con Gemini).") + "</li></ul><p>Elige un <b>tema</b> y un <b>nivel</b> y pulsa <b>Inventa un problema</b>.</p>";
+    var h = "<p><b>¡Hola!</b> Soy tu profe de mates de 1.º de Bachillerato. Puedo:</p><ul><li>inventarte <b>problemas con dibujo, datos y solución paso a paso</b> (nuevos cada vez);</li><li>darte <b>pistas</b> y <b>comprobar tus respuestas</b>;</li><li>" + "responder <b>cualquier duda</b> y crear problemas a medida con IA." + "</li></ul><p>Elige un <b>tema</b> y un <b>nivel</b> y pulsa <b>Inventa un problema</b>.</p>";
     addBot(h);
   }
   welcome();
