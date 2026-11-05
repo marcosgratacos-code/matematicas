@@ -133,9 +133,11 @@ footer a { color: var(--accent); }
   .check { margin-left: 0; }
 }
 </style>
-
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="tutor.css">
 </head>
 <body>
+<div class="layout">
 <div class="wrap">
   <header class="top">
     <div>
@@ -177,6 +179,8 @@ footer a { color: var(--accent); }
       <button class="theme" id="theme" type="button">Cambiar tema</button>
     </div>
   </footer>
+</div>
+<aside id="tutor" aria-label="Profesor virtual de matemáticas"></aside>
 </div>
 
 <script>
@@ -439,9 +443,25 @@ footer a { color: var(--accent); }
     r.setAttribute("data-theme", dark ? "light" : "dark");
   });
 
+  /* El profesor virtual (tutor.js) usa el buscador: lo expongo con una interfaz mínima. */
+  window.MatesBuscador = {
+    cols: cols,
+    search: search,
+    setQuery: function (q) {
+      state.q = q; state.col = ""; state.shown = 40; elQ.value = q; elCol.value = "";
+      render();
+      document.getElementById("main").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   render();
 })();
 </script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script defer src="figuras.js"></script>
+<script defer src="generador.js"></script>
+<script defer src="tutor.js"></script>
 
 </body>
 </html>
