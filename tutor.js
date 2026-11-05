@@ -125,8 +125,9 @@
     elIn.placeholder = ph;
   }
   function chips() {
-    var c = [["Inventa un problema", "p"], ["Otro parecido", "same"], ["Dame una pista", "hint"], ["Resumen de teoría", "teoria"]];
-    c.push(["Problema a medida (IA)", "ia"]);
+    var own = prov() !== "free";
+    var c = own ? [["Inventa un problema (IA)", "ia"], ["Problema rápido (sin IA)", "p"]] : [["Inventa un problema", "p"], ["Problema a medida (IA)", "ia"]];
+    c = c.concat([["Otro parecido", "same"], ["Dame una pista", "hint"], ["Resumen de teoría", "teoria"]]);
     elChips.innerHTML = c.map(function (x) { return '<button type="button" class="chip" data-c="' + x[1] + '">' + esc(x[0]) + "</button>"; }).join("");
   }
   setStatus(); chips();
@@ -366,6 +367,7 @@
     });
     function finish(d2, txt) {
       busy(false);
+      d2.querySelector(".tt-b").insertAdjacentHTML("beforeend", '<div class="tt-via">Respondido con ' + ({ free: "la IA gratuita integrada", gemini: "Gemini", claude: "Claude" })[prov()] + " · " + esc(model()) + "</div>");
       if (/```figura|:::pista|:::solucion/.test(txt)) {
         d2.querySelector(".tt-b").insertAdjacentHTML("beforeend", '<div class="tt-sug"><button type="button" class="chip" data-c="llm-more">Otro parecido</button><button type="button" class="chip" data-c="llm-hard">Más difícil</button><button type="button" class="chip" data-c="llm-solve">Resuélvelo paso a paso</button></div>');
       }
@@ -457,7 +459,14 @@
   fillModels();
   $("#tt-save").addEventListener("click", function () {
     cfg.prov = selP.value; cfg.key = inKey.value.trim(); cfg.model = inModel.value.trim(); save(); setStatus(); chips(); elCfgP.hidden = true;
-    say(cfg.prov !== "free" && !hasKey() ? "He guardado los ajustes, pero falta la clave de API: mientras tanto uso la IA gratuita integrada." : "Listo: ahora uso **" + ({ free: "la IA gratuita integrada", gemini: "Gemini con tu clave", claude: "Claude con tu clave" })[prov()] + "**.");
+    if (cfg.prov !== "free" && !hasKey()) { say("He guardado los ajustes, pero falta la clave de API: mientras tanto uso la IA gratuita integrada."); return; }
+    if (prov() === "free") { say("Listo: uso **la IA gratuita integrada**."); return; }
+    var nm = ({ gemini: "Gemini", claude: "Claude" })[prov()], d = say("Probando tu clave de " + nm + "…"), got = "";
+    streamChat([{ role: "user", text: "Responde solo con la palabra: OK" }], function (t) { got += t; }, null).then(function () {
+      d.querySelector(".tt-b").innerHTML = md("✓ **" + nm + " funciona** con tu clave (modelo `" + model() + "`). A partir de ahora contesto con " + nm + "."); typeset(d);
+    }).catch(function (e) {
+      d.querySelector(".tt-b").innerHTML = '<p class="tt-err">' + esc("No he podido usar " + nm + ": " + e.message) + "</p><p>Mientras no se arregle, las preguntas fallarán: puedes volver a <b>IA gratuita integrada</b> en ⚙.</p>";
+    });
   });
   $("#tt-rm").addEventListener("click", function () { cfg.key = ""; inKey.value = ""; save(); setStatus(); chips(); say("He borrado la clave de este navegador. Vuelvo a usar la IA gratuita integrada."); });
   $("#tt-new").addEventListener("click", function () {

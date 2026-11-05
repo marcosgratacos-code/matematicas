@@ -125,3 +125,5 @@
   #tutor { inset: 0; width: auto; height: auto; border-radius: 0; border: 0; }
   .tt-b { max-width: 96%; }
 }
+
+.tt-via { margin-top: 8px; font: 400 11px var(--font-mono); color: var(--muted); }
